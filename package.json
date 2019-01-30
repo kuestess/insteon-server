@@ -1,6 +1,6 @@
 {
   "name": "insteon-server",
-  "version": "0.1",
+  "version": "0.1.0",
   "description": "Local Express server for control of Insteon devices",
   "license": "ISC",
   "keywords": [  ],
@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "home-controller": ">=0.8.0",
-    "express": "^4.16.2"
+    "express": "^4.16.2",
+    "ws": "^6.1.2"
   }
 }

@@ -5,16 +5,22 @@ var express = require('express')
 var app = express()
 var fs = require('fs')
 
+var websocket = require('ws')
+var wss = new websocket.Server({port: 8080})
+
 var configFile = fs.readFileSync('./config.json')
-var config = JSON.parse(configFile)
-var connectedToHub = false
+var configJSON = JSON.parse(configFile)
+var platformIndex = configJSON.platforms.findIndex(function(item){return item.platform =='InsteonLocal'})
+var config = configJSON.platforms[platformIndex]
 
 InsteonServer()
 
 function InsteonServer() {
     var self = this
     var platform = this
-	
+    
+    var devices = config.devices
+
     var host = config.host
     var port = config.port
     var user = config.user
@@ -29,8 +35,9 @@ function InsteonServer() {
         password: pass
     }
 	
-	connectToHub()
-	
+    connectToHub()
+    init()
+    
     app.get('/light/:id/on', function(req, res) {
         var id = req.params.id.toUpperCase()
         hub.light(id).turnOn().then(function(status) {
@@ -46,6 +53,30 @@ function InsteonServer() {
     app.get('/light/:id/off', function(req, res) {
         var id = req.params.id.toUpperCase()
         hub.light(id).turnOff().then(function(status) {
+            if (status.response) {
+                res.sendStatus(200)
+                
+            } else {
+                res.sendStatus(404)
+            }
+        })
+    })
+	
+	    app.get('/light/:id/faston', function(req, res) {
+        var id = req.params.id.toUpperCase()
+        hub.light(id).turnOnFast().then(function(status) {
+            if (status.response) {
+                res.sendStatus(200)
+				
+            } else {
+                res.sendStatus(404)
+            }
+        })
+    })
+	
+    app.get('/light/:id/fastoff', function(req, res) {
+        var id = req.params.id.toUpperCase()
+        hub.light(id).turnOffFast().then(function(status) {
             if (status.response) {
                 res.sendStatus(200)
                 
@@ -169,7 +200,8 @@ function InsteonServer() {
 	app.listen(server_port)
 	
 	function connectToHub() {
-				
+        console.log('Model: ' + model)
+        		
 		if (model == "2245") {
 			console.log('Connecting to Insteon Model 2245 Hub...')
 			hub.httpClient(hubConfig, function(had_error) {
@@ -177,7 +209,7 @@ function InsteonServer() {
 				connectedToHub = true
 			})
 		} else if (model == "2243") {
-			console.console.log('Connecting to Insteon "Hub Pro" Hub...')
+			console.log('Connecting to Insteon "Hub Pro" Hub...')
 			connectingToHub = true
 			hub.serial("/dev/ttyS4",{baudRate:19200}, function(had_error) {
 				console.log('Connected to Insteon "Hub Pro" Hub...')
@@ -197,5 +229,50 @@ function InsteonServer() {
 				connectedToHub = true
 			})
 		}
-	}
+    }
+
+    function init() {
+        console.log('Initiating websocket...')
+        wss.on('connection', function (ws) {
+            console.log('Client connected to websocket')
+            ws.send('Connected to Insteon Server')
+        
+            devices.forEach(function(device){
+                switch (device.deviceType) {     
+                    case 'doorsensor':
+                    case 'windowsensor':
+                    case 'contactsensor':
+                        device.door = hub.door(device.deviceID)
+                        
+                        device.door.on('opened', function(){		
+                            console.log('Got open for ' + device.name)
+                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: open')
+                        })
+                        
+                        device.door.on('closed', function(){
+                            console.log('Got closed for ' + device.name)
+                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: closed')
+                        })
+                        
+                    break
+                    
+                    case 'lightbulb':
+                    case 'dimmer':                    
+                        device.light = hub.light(device.deviceID)
+                        
+                        device.light.on('turnOn', function (group, level) {
+                            console.log(device.name + ' turned on')  
+                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: ' + level)
+                        })
+
+                        device.light.on('turnOff', function () {
+                            console.log(device.name + ' turned off')
+                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: 0')
+                        })
+
+                    break
+                }  
+            }) 
+        }
+    )}
 }
