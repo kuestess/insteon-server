@@ -17,6 +17,7 @@
   "dependencies": {
     "home-controller": ">=0.8.0",
     "express": "^4.16.2",
-    "ws": "^6.1.2"
+    "ws": "^6.1.2",
+    "underscore": ">=1.8.3"
   }
 }

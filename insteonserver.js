@@ -4,6 +4,7 @@ var hub = new Insteon()
 var express = require('express')
 var app = express()
 var fs = require('fs')
+var _ = require('underscore')
 
 var websocket = require('ws')
 var wss = new websocket.Server({port: 8080})
@@ -20,6 +21,11 @@ function InsteonServer() {
     var platform = this
     
     var devices = config.devices
+    var deviceIDs = []
+
+    devices.forEach(function(device){
+        deviceIDs.push(device.deviceID)
+    })
 
     var host = config.host
     var port = config.port
@@ -233,6 +239,8 @@ function InsteonServer() {
 
     function init() {
         console.log('Initiating websocket...')
+        var message
+
         wss.on('connection', function (ws) {
             console.log('Client connected to websocket')
             ws.send('Connected to Insteon Server')
@@ -246,33 +254,128 @@ function InsteonServer() {
                         
                         device.door.on('opened', function(){		
                             console.log('Got open for ' + device.name)
-                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: open')
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: open}
+                            ws.send(JSON.stringify(message))
                         })
                         
                         device.door.on('closed', function(){
                             console.log('Got closed for ' + device.name)
-                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: closed')
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: closed}
+                            ws.send(JSON.stringify(message))
                         })
                         
                     break
                     
-                    case 'lightbulb':
-                    case 'dimmer':                    
+                    case 'switch':                  
                         device.light = hub.light(device.deviceID)
                         
                         device.light.on('turnOn', function (group, level) {
-                            console.log(device.name + ' turned on')  
-                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: ' + level)
+                            console.log(device.name + ' turned on')
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: level}  
+                            ws.send(JSON.stringify(message))
                         })
 
                         device.light.on('turnOff', function () {
                             console.log(device.name + ' turned off')
-                            ws.send('name: ' + device.name + ' id: ' + device.deviceID + ' state: 0')
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: 0}  
+                            ws.send(JSON.stringify(message))
                         })
 
                     break
+
+                    case 'lightbulb':
+                    case 'dimmer':                   
+                        device.light = hub.light(device.deviceID)
+                        device.light.level().then(function(level) {
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: level}  
+                            ws.send(JSON.stringify(message))
+                        })
+                    break
                 }  
-            }) 
+            })
+            
+            eventListener()
+
+            function eventListener() {
+                console.log('Insteon event listener started...')
+                
+                hub.on('command', function(data) {
+                    
+                    if (typeof data.standard !== 'undefined') {
+                        //console.log('Received command for ' + data.standard.id)
+                        
+                        var info = JSON.stringify(data)
+                        var id = data.standard.id.toUpperCase()
+                        var command1 = data.standard.command1
+                        var command2 = data.standard.command2
+                        var messageType = data.standard.messageType
+                        var gateway = data.standard.gatewayId
+                        
+                        var isDevice = _.contains(deviceIDs, id, 0)
+                        var message
+
+                        if (isDevice) {
+                            var foundDevices = devices.filter(function(item) {
+                                return item.deviceID == id
+                            })
+            
+                            console.log('Found ' + foundDevices.length + ' accessories matching ' + id)
+                            console.log('Hub command: ' + info)
+            
+                            for (var i = 0, len = foundDevices.length; i < len; i++) {
+                                var foundDevice = foundDevices[i]
+                                console.log('Got event for ' + foundDevice.name + ' (' + foundDevice.deviceID + ')')
+                                
+                                switch (foundDevice.deviceType) {
+                                case 'lightbulb':
+                                case 'dimmer':
+                                    if (command1 == "19" || command1 == "03" || command1 == "04" || (command1 == "00" && command2 != "00") || (command1 == "06" && messageType == "1")) { //19 = status
+                                        var level_int = parseInt(command2, 16) * (100 / 255)
+                                        var level = Math.ceil(level_int)
+            
+                                        console.log('Got updated status for ' + foundDevice.name)
+                                        message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: level}  
+                                        ws.send(JSON.stringify(message))
+                                    }
+                                    
+                                    if (command1 == 11) { //11 = on
+                                        var level_int = parseInt(command2, 16)*(100/255);
+                                        var level = Math.ceil(level_int);
+                        
+                                        console.log('Got on event for ' + foundDevice.name);
+                                        message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: 100}  
+                                        ws.send(JSON.stringify(message))
+                                    }
+                                    
+                                    if (command1 == 12) { //fast on
+                                        console.log('Got fast on event for ' + foundDevice.name);
+                                        message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: 100}  
+                                        ws.send(JSON.stringify(message))
+                                    }
+                                    
+                                    if (command1 == 13 || command1 == 14) { //13 = off, 14= fast off
+                                        if (command1 == 13) {
+                                            console.log('Got off event for ' + foundDevice.name);
+                                        } else {console.log('Got fast off event for ' + foundDevice.name)}
+                                        message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: 0}  
+                                        ws.send(JSON.stringify(message))                                      
+                                    }
+                                    
+                                    if (command1 == 18) { //stop dimming
+                                        console.log('Got dim event for ' + foundDevice.name);
+                                        foundDevice.light.level().then(function(level) {
+                                            message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: level}  
+                                            ws.send(JSON.stringify(message))
+                                        })
+                                    }
+
+                                    break
+                                }
+                            }
+                        }
+                    }
+                })
+            }
         }
     )}
 }
