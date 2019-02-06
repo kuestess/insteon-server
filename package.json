@@ -6,7 +6,7 @@
   "keywords": [  ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/kuestess/hinsteon-server.git"
+    "url": "git://github.com/kuestess/insteon-server.git"
   },
   "bugs": {
     "url": "https://github.com/kuestess/insteon-server/issues"

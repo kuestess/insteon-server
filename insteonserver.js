@@ -254,13 +254,13 @@ function InsteonServer() {
                         
                         device.door.on('opened', function(){		
                             console.log('Got open for ' + device.name)
-                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: open}
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: 'open'}
                             ws.send(JSON.stringify(message))
                         })
                         
                         device.door.on('closed', function(){
                             console.log('Got closed for ' + device.name)
-                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: closed}
+                            message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: 'closed'}
                             ws.send(JSON.stringify(message))
                         })
                         
