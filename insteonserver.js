@@ -240,9 +240,16 @@ function InsteonServer() {
     function init() {
         console.log('Initiating websocket...')
         var message
-
+   
         wss.on('connection', function (ws) {
             console.log('Client connected to websocket')
+            ws.isAlive = true
+
+            ws.on('close', function(){
+                console.log('Websocket closed by client')
+                ws.isAlive = false
+            })
+
             ws.send('Connected to Insteon Server')
         
             devices.forEach(function(device){
@@ -255,13 +262,13 @@ function InsteonServer() {
                         device.door.on('opened', function(){		
                             console.log('Got open for ' + device.name)
                             message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: 'open'}
-                            ws.send(JSON.stringify(message))
+                            if(ws.isAlive){ws.send(JSON.stringify(message))}
                         })
                         
                         device.door.on('closed', function(){
                             console.log('Got closed for ' + device.name)
                             message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: 'closed'}
-                            ws.send(JSON.stringify(message))
+                            if(ws.isAlive){ws.send(JSON.stringify(message))}
                         })
                         
                     break
@@ -272,13 +279,13 @@ function InsteonServer() {
                         device.light.on('turnOn', function (group, level) {
                             console.log(device.name + ' turned on')
                             message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: level}  
-                            ws.send(JSON.stringify(message))
+                            if(ws.isAlive){ws.send(JSON.stringify(message))}
                         })
 
                         device.light.on('turnOff', function () {
                             console.log(device.name + ' turned off')
                             message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: 0}  
-                            ws.send(JSON.stringify(message))
+                            if(ws.isAlive){ws.send(JSON.stringify(message))}
                         })
 
                     break
@@ -288,7 +295,7 @@ function InsteonServer() {
                         device.light = hub.light(device.deviceID)
                         device.light.level().then(function(level) {
                             message = {name: device.name, id: device.deviceID, deviceType: device.deviceType, state: level}  
-                            ws.send(JSON.stringify(message))
+                            if(ws.isAlive){ws.send(JSON.stringify(message))}
                         })
                     break
                 }  
@@ -335,7 +342,7 @@ function InsteonServer() {
             
                                         console.log('Got updated status for ' + foundDevice.name)
                                         message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: level}  
-                                        ws.send(JSON.stringify(message))
+                                        if(ws.isAlive){ws.send(JSON.stringify(message))}
                                     }
                                     
                                     if (command1 == 11) { //11 = on
@@ -344,13 +351,13 @@ function InsteonServer() {
                         
                                         console.log('Got on event for ' + foundDevice.name);
                                         message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: 100}  
-                                        ws.send(JSON.stringify(message))
+                                        if(ws.isAlive){ws.send(JSON.stringify(message))}
                                     }
                                     
                                     if (command1 == 12) { //fast on
                                         console.log('Got fast on event for ' + foundDevice.name);
                                         message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: 100}  
-                                        ws.send(JSON.stringify(message))
+                                        if(ws.isAlive){ws.send(JSON.stringify(message))}
                                     }
                                     
                                     if (command1 == 13 || command1 == 14) { //13 = off, 14= fast off
@@ -358,14 +365,14 @@ function InsteonServer() {
                                             console.log('Got off event for ' + foundDevice.name);
                                         } else {console.log('Got fast off event for ' + foundDevice.name)}
                                         message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: 0}  
-                                        ws.send(JSON.stringify(message))                                      
+                                        if(ws.isAlive){ws.send(JSON.stringify(message))}                                      
                                     }
                                     
                                     if (command1 == 18) { //stop dimming
                                         console.log('Got dim event for ' + foundDevice.name);
                                         foundDevice.light.level().then(function(level) {
                                             message = {name: foundDevice.name, id: foundDevice.deviceID, deviceType: foundDevice.deviceType, state: level}  
-                                            ws.send(JSON.stringify(message))
+                                            if(ws.isAlive){ws.send(JSON.stringify(message))}
                                         })
                                     }
 
